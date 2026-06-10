@@ -1,21 +1,16 @@
 import type { Metadata } from "next";
-import { Geist, Geist_Mono } from "next/font/google";
+import { Inter } from "next/font/google";
 import "./globals.css";
 import { AuthProvider } from "@/components/AuthProvider";
 
-const geistSans = Geist({
-  variable: "--font-geist-sans",
-  subsets: ["latin"],
-});
-
-const geistMono = Geist_Mono({
-  variable: "--font-geist-mono",
+const inter = Inter({
+  variable: "--font-sans",
   subsets: ["latin"],
 });
 
 export const metadata: Metadata = {
-  title: "Space Muce",
-  description: "Space Muce room redesign with Gemini AI",
+  title: "Space Muse",
+  description: "Space Muse room redesign with Gemini AI",
 };
 
 export default function RootLayout({
@@ -26,9 +21,9 @@ export default function RootLayout({
   return (
     <html
       lang="en"
-      className={`${geistSans.variable} ${geistMono.variable} h-full antialiased`}
+      className={`${inter.variable} min-h-screen lg:h-screen lg:overflow-hidden antialiased`}
     >
-      <body className="min-h-full flex flex-col">
+      <body className="min-h-screen lg:h-screen lg:overflow-hidden flex flex-col bg-[#121214] text-white">
         <AuthProvider>{children}</AuthProvider>
       </body>
     </html>

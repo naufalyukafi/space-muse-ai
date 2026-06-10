@@ -82,12 +82,13 @@ Authorization: Bearer <SUPABASE_ANON_JWT_TOKEN>
 ---
 
 ### 1. Generate Redesigned Space (`POST /api/generate`)
-Redesigns a space (full room photo or furniture close-up photo) based on the chosen design style and color palette.
+Redesigns a space (full room photo or furniture close-up photo) based on the chosen design style and color palette. Either `room_photo` or `reuse_image_url` must be provided.
 
 #### Request Payload (`multipart/form-data`)
 | Field Name | Type | Allowed Values / Constraints | Description |
 | :--- | :--- | :--- | :--- |
-| `room_photo` | File | `image/jpeg`, `image/png`, `image/webp` (50KB to 10MB) | The photo to redesign. |
+| `room_photo` | File | `image/jpeg`, `image/png`, `image/webp` (50KB to 10MB) | The photo to redesign. Required if `reuse_image_url` is not provided. |
+| `reuse_image_url` | String | Valid Image URL | Original room image URL from a previous generation to redesign. Required if `room_photo` is not provided. |
 | `room_type` | String | `living_room`, `bedroom`, `kitchen`, `bathroom`, `home_office` | The type of the room. |
 | `style` | String | `minimalist`, `japandi`, `industrial`, `bohemian`, `scandinavian` | The target design style. |
 | `palette` | String | `neutral`, `warm`, `cool`, `bold` | The target color palette. |
