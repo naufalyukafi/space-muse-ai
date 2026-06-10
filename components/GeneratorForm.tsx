@@ -141,15 +141,16 @@ export function GeneratorForm({
       {/* 3. Notes Area */}
       <div className="flex flex-col gap-2 mt-1">
         <div className="flex justify-between items-center">
-          <h2 className="text-[12px] font-semibold text-white/90 uppercase tracking-wider text-purple-300">
+          <label htmlFor="notes" className="text-[12px] font-semibold text-white/90 uppercase tracking-wider text-purple-300 cursor-pointer">
             <span className="font-bold mr-1">3.</span> What do you want to add?
-          </h2>
+          </label>
           <span className="text-[9px] text-white/40 font-mono">
             {notes.length}/200
           </span>
         </div>
         <div className="glass p-3 rounded-[1.2rem] flex flex-col h-24 relative group border border-white/5 focus-within:border-purple-300/40 transition">
           <textarea
+            id="notes"
             value={notes}
             onChange={handleNotesChange}
             disabled={isGenerating}
