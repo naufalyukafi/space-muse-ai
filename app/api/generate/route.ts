@@ -47,15 +47,16 @@ export async function POST(request: Request) {
     }
 
     const room_photo = formData.get('room_photo') as File | null;
+    const reuse_image_url = formData.get('reuse_image_url') as string | null;
     const room_type = formData.get('room_type') as string | null;
     const style = formData.get('style') as string | null;
     const palette = formData.get('palette') as string | null;
     const notes = formData.get('notes') as string | null;
 
     // Check missing params
-    if (!room_photo || !room_type || !style || !palette) {
+    if ((!room_photo && !reuse_image_url) || !room_type || !style || !palette) {
       const missing = [];
-      if (!room_photo) missing.push('room_photo');
+      if (!room_photo && !reuse_image_url) missing.push('room_photo or reuse_image_url');
       if (!room_type) missing.push('room_type');
       if (!style) missing.push('style');
       if (!palette) missing.push('palette');
@@ -81,30 +82,66 @@ export async function POST(request: Request) {
       return apiBadRequest('Notes must be 200 characters or less', 'NOTES_TOO_LONG');
     }
 
-    // Check file mime type
-    if (!ALLOWED_MIME_TYPES.includes(room_photo.type)) {
-      console.log('Validation failed: Invalid MIME type', {
-        fileName: room_photo.name,
-        type: room_photo.type
-      });
-      return apiBadRequest(`Invalid parameters: Unsupported image type (${room_photo.type}). Only JPEG, PNG, and WebP are allowed.`);
-    }
+    let imageBuffer: Buffer;
+    let mimeType: string;
 
-    // Check file size (50KB to 10MB)
     const minSize = 50 * 1024; // 50KB
     const maxSize = 10 * 1024 * 1024; // 10MB
-    if (room_photo.size > maxSize) {
-      console.log('Validation failed: File too large', { size: room_photo.size });
-      return apiBadRequest('Max file size is 10MB', 'FILE_TOO_LARGE');
-    }
-    if (room_photo.size < minSize) {
-      console.log('Validation failed: File too small', { size: room_photo.size });
-      return apiBadRequest('Image too small or dark', 'FILE_TOO_SMALL');
-    }
 
-    // Convert file to Buffer
-    const arrayBuffer = await room_photo.arrayBuffer();
-    const imageBuffer = Buffer.from(arrayBuffer);
+    if (room_photo) {
+      // Check file mime type
+      if (!ALLOWED_MIME_TYPES.includes(room_photo.type)) {
+        console.log('Validation failed: Invalid MIME type', {
+          fileName: room_photo.name,
+          type: room_photo.type
+        });
+        return apiBadRequest(`Invalid parameters: Unsupported image type (${room_photo.type}). Only JPEG, PNG, and WebP are allowed.`);
+      }
+
+      // Check file size (50KB to 10MB)
+      if (room_photo.size > maxSize) {
+        console.log('Validation failed: File too large', { size: room_photo.size });
+        return apiBadRequest('Max file size is 10MB', 'FILE_TOO_LARGE');
+      }
+      if (room_photo.size < minSize) {
+        console.log('Validation failed: File too small', { size: room_photo.size });
+        return apiBadRequest('Image too small or dark', 'FILE_TOO_SMALL');
+      }
+
+      // Convert file to Buffer
+      const arrayBuffer = await room_photo.arrayBuffer();
+      imageBuffer = Buffer.from(arrayBuffer);
+      mimeType = room_photo.type;
+    } else if (reuse_image_url) {
+      // Fetch image from URL
+      try {
+        const res = await fetch(reuse_image_url);
+        if (!res.ok) {
+          console.error(`Failed to fetch reuse image from URL ${reuse_image_url}: ${res.statusText}`);
+          return apiBadRequest('Failed to fetch the original image for redesign. Ensure the URL is valid.');
+        }
+        const contentType = res.headers.get('content-type') || 'image/jpeg';
+        if (!ALLOWED_MIME_TYPES.includes(contentType)) {
+          return apiBadRequest(`Unsupported image type (${contentType}). Only JPEG, PNG, and WebP are allowed.`);
+        }
+        const arrayBuffer = await res.arrayBuffer();
+        imageBuffer = Buffer.from(arrayBuffer);
+        mimeType = contentType;
+
+        // Check size on fetched buffer
+        if (imageBuffer.length > maxSize) {
+          return apiBadRequest('Max file size is 10MB', 'FILE_TOO_LARGE');
+        }
+        if (imageBuffer.length < minSize) {
+          return apiBadRequest('Image too small or dark', 'FILE_TOO_SMALL');
+        }
+      } catch (fetchErr) {
+        console.error('Error fetching reuse image URL:', fetchErr);
+        return apiServerError('Error accessing original image for redesign', 'IMAGE_FETCH_ERROR');
+      }
+    } else {
+      return apiBadRequest('Missing room photo or image URL');
+    }
 
     const uuid = crypto.randomUUID();
 
@@ -114,7 +151,7 @@ export async function POST(request: Request) {
       .storage
       .from('room-uploads')
       .upload(originalPath, imageBuffer, {
-        contentType: room_photo.type,
+        contentType: mimeType,
         upsert: true
       });
 
@@ -127,7 +164,7 @@ export async function POST(request: Request) {
 
     let resultBuffer: Buffer;
     try {
-      resultBuffer = await generateInteriorDesign(imageBuffer, room_photo.type, promptBuilt);
+      resultBuffer = await generateInteriorDesign(imageBuffer, mimeType, promptBuilt);
     } catch (err: unknown) {
       console.error('Gemini generation error:', err);
       const errorMsg = err instanceof Error ? err.message : '';
