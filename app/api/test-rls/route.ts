@@ -1,6 +1,5 @@
-import { NextResponse } from 'next/server';
-import { supabaseServer, initStorage } from '@/lib/supabase-server';
-import { createClient } from '@supabase/supabase-js';
+import { supabaseServer, getAuthContext, initStorage } from '@/lib/supabase-server';
+import { apiSuccess, apiServerError } from '@/lib/api-response';
 
 export async function GET(request: Request) {
   try {
@@ -14,38 +13,40 @@ export async function GET(request: Request) {
       .limit(1);
 
     // 2. Client using Auth Header (Respects RLS)
-    const authHeader = request.headers.get('Authorization');
+    const auth = await getAuthContext(request);
     let rlsData = null;
     let rlsError = null;
-    let userId = null;
 
-    if (authHeader) {
-      const token = authHeader.replace('Bearer ', '');
-      
-      // Get the user from the token
-      const { data: { user } } = await supabaseServer.auth.getUser(token);
-      userId = user?.id;
-
-      // Create a scoped client with the user's JWT to test RLS
-      const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL!;
-      const supabaseAnonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!;
-      
-      const scopedClient = createClient(supabaseUrl, supabaseAnonKey, {
-        global: {
-          headers: { Authorization: `Bearer ${token}` }
-        }
-      });
+    if (auth) {
+      const { userId, scopedClient } = auth;
 
       const { data, error } = await scopedClient
         .from('generations')
         .select('*')
         .limit(1);
-        
+
       rlsData = data;
       rlsError = error;
+
+      return apiSuccess({
+        success: true,
+        serviceRoleTest: {
+          works: !bypassError,
+          error: bypassError,
+          data: bypassData
+        },
+        rlsTest: {
+          userIdProvided: true,
+          userId: userId,
+          works: !rlsError,
+          error: rlsError,
+          data: rlsData
+        },
+        message: "RLS test route executed successfully. Ensure your SQL migrations are applied in Supabase Studio."
+      });
     }
 
-    return NextResponse.json({
+    return apiSuccess({
       success: true,
       serviceRoleTest: {
         works: !bypassError,
@@ -53,15 +54,15 @@ export async function GET(request: Request) {
         data: bypassData
       },
       rlsTest: {
-        userIdProvided: !!userId,
-        userId: userId,
-        works: !rlsError,
-        error: rlsError,
-        data: rlsData
+        userIdProvided: false,
+        userId: null,
+        works: false,
+        error: 'No Authorization header provided',
+        data: null
       },
-      message: "RLS test route executed successfully. Ensure your SQL migrations are applied in Supabase Studio."
+      message: "RLS test route executed successfully. Provide an Authorization header to test RLS."
     });
   } catch (error: unknown) {
-    return NextResponse.json({ success: false, error: (error as Error).message }, { status: 500 });
+    return apiServerError((error as Error).message, 'TEST_RLS_ERROR');
   }
 }

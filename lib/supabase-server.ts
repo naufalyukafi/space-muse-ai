@@ -1,4 +1,4 @@
-import { createClient } from '@supabase/supabase-js';
+import { createClient, SupabaseClient } from '@supabase/supabase-js';
 
 const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
 const supabaseServiceKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
@@ -43,3 +43,36 @@ export async function initStorage() {
     }
   }
 }
+
+export interface AuthContext {
+  userId: string;
+  token: string;
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  scopedClient: SupabaseClient<any>;
+}
+
+export async function getAuthContext(request: Request): Promise<AuthContext | null> {
+  const authHeader = request.headers.get('Authorization');
+  if (!authHeader) return null;
+
+  const token = authHeader.replace('Bearer ', '');
+  try {
+    const { data: { user }, error: authError } = await supabaseServer.auth.getUser(token);
+    if (authError || !user) return null;
+
+    const scopedClient = createClient(supabaseUrl!, process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!, {
+      global: {
+        headers: { Authorization: `Bearer ${token}` }
+      }
+    });
+
+    return {
+      userId: user.id,
+      token,
+      scopedClient
+    };
+  } catch {
+    return null;
+  }
+}
+
