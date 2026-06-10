@@ -198,7 +198,7 @@ export default function Home() {
 
           <div className="flex flex-col items-center mt-2 mb-2 shrink-0">
             <div className="w-[6rem] h-[6rem] rounded-full magic-sphere mb-3"></div>
-            <h1 className="text-[1.1rem] font-bold mb-1 tracking-tight text-white">AI Room Redesign</h1>
+            <h1 className="text-[1.1rem] font-bold mb-1 tracking-tight text-white">SPACE MUSE AI</h1>
             <p className="text-[10px] text-white/50 text-center px-4 leading-normal">
               Transform empty or old rooms into your dream design in seconds.
             </p>

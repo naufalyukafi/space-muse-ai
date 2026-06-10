@@ -45,9 +45,9 @@ export function ErrorBanner({ error, onDismiss }: ErrorBannerProps) {
       IconComponent = AlertCircle;
       break;
     case 'FILE_TOO_SMALL':
-      title = 'Photo Too Small or Dark';
-      message = 'Photo must be at least 50KB. Please use a better camera or increase room lighting.';
-      IconComponent = Contrast;
+      title = 'Photo Size Too Small';
+      message = 'Photo must be at least 50KB. Please upload a higher resolution or larger image.';
+      IconComponent = AlertCircle;
       break;
     case 'INVALID_PARAMS':
       title = 'Invalid Parameters';
