@@ -38,6 +38,7 @@ export default function Home() {
   const [generations, setGenerations] = useState<Generation[]>([]);
   const [activeGen, setActiveGen] = useState<Generation | null>(null);
   const [isGenerating, setIsGenerating] = useState(false);
+  const [progressMessage, setProgressMessage] = useState('');
   const [loadingGallery, setLoadingGallery] = useState(true);
   const [error, setError] = useState<{ message: string; code: string } | null>(null);
 
@@ -103,6 +104,7 @@ export default function Home() {
     if (!session?.access_token || (!selectedFile && !imageUrl)) return;
 
     setIsGenerating(true);
+    setProgressMessage('Submitting request...');
     handleClearError();
 
     const formData = new FormData();
@@ -127,10 +129,55 @@ export default function Home() {
         body: formData,
       });
 
-      const json = await res.json();
+      const contentType = res.headers.get('content-type') || '';
+      if (!res.ok && !contentType.includes('text/event-stream')) {
+        const json = await res.json();
+        handleError(
+          json.message || 'Failed to redesign room. Please try again.',
+          json.code || 'GENERATION_ERROR'
+        );
+        return;
+      }
 
-      if (json.status === 'success' && json.data) {
-        const newGen: Generation = json.data;
+      const reader = res.body?.getReader();
+      if (!reader) {
+        throw new Error('No stream reader found');
+      }
+
+      const decoder = new TextDecoder();
+      let buffer = '';
+      let successData = null;
+
+      while (true) {
+        const { done, value } = await reader.read();
+        if (done) break;
+
+        buffer += decoder.decode(value, { stream: true });
+        const lines = buffer.split('\n');
+        buffer = lines.pop() || '';
+
+        for (const line of lines) {
+          if (!line.trim()) continue;
+          try {
+            const json = JSON.parse(line);
+            if (json.status === 'progress') {
+              setProgressMessage(json.message);
+            } else if (json.status === 'success') {
+              successData = json.data;
+            } else if (json.status === 'error') {
+              throw { message: json.message, code: json.code || 'GENERATION_ERROR' };
+            }
+          } catch (parseErr) {
+            if (parseErr && typeof parseErr === 'object' && 'code' in parseErr) {
+              throw parseErr;
+            }
+            console.error('Failed to parse line:', line, parseErr);
+          }
+        }
+      }
+
+      if (successData) {
+        const newGen: Generation = successData;
 
         // Add to front of local list and select
         setGenerations((prev) => [newGen, ...prev]);
@@ -141,17 +188,18 @@ export default function Home() {
         setImageUrl(null);
         setNotes('');
       } else {
-        // Handle failed API states
-        handleError(
-          json.message || 'Failed to redesign room. Please try again.',
-          json.code || 'GENERATION_ERROR'
-        );
+        throw { message: 'Unexpected end of stream', code: 'GENERATION_ERROR' };
       }
-    } catch (err) {
+
+    } catch (err: any) {
       console.error('Unexpected generation error:', err);
-      handleError('Server connection error. Please try again in a few moments.', 'CONNECTION_ERROR');
+      handleError(
+        err.message || 'Server connection error. Please try again in a few moments.',
+        err.code || 'CONNECTION_ERROR'
+      );
     } finally {
       setIsGenerating(false);
+      setProgressMessage('');
     }
   };
 
@@ -251,7 +299,32 @@ export default function Home() {
 
           {/* Main Visualizer Area */}
           <div className="h-[350px] md:h-[450px] lg:flex-1 lg:min-h-0 flex flex-col">
-            {loadingGallery ? (
+            {isGenerating ? (
+              <div className="flex-1 rounded-[2rem] glass border border-white/10 bg-black/30 flex flex-col items-center justify-center p-8 text-center min-h-[300px] relative overflow-hidden">
+                <div className="shimmer"></div>
+
+                {/* Visualizer split mockup */}
+                <div className="absolute inset-y-0 left-1/2 w-[1px] bg-white/10 pointer-events-none">
+                  <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-10 h-10 rounded-full bg-[#121214]/85 border border-white/15 flex items-center justify-center text-white/35 backdrop-blur-md">
+                    <ArrowLeftRight className="w-4 h-4 text-pink-300 animate-pulse" />
+                  </div>
+                </div>
+
+                <div className="z-10 flex flex-col items-center gap-4">
+                  <div className="w-16 h-16 rounded-full bg-gradient-to-tr from-pink-500/10 to-blue-500/10 flex items-center justify-center border border-white/10 shadow-lg">
+                    <Loader2 className="w-6 h-6 text-pink-300 animate-spin" />
+                  </div>
+                  <div>
+                    <h3 className="text-[14px] font-semibold text-white/85">
+                      {progressMessage || 'Transforming your space...'}
+                    </h3>
+                    <p className="text-[11px] text-white/45 mt-1.5 max-w-[280px] leading-relaxed">
+                      AI is generating your custom interior design. This usually takes 10-20 seconds.
+                    </p>
+                  </div>
+                </div>
+              </div>
+            ) : loadingGallery ? (
               <div className="flex-1 rounded-[2rem] glass border border-white/10 bg-black/30 flex flex-col items-center justify-center p-8 text-center min-h-[300px] relative overflow-hidden">
                 <div className="shimmer"></div>
 
@@ -286,7 +359,7 @@ export default function Home() {
               <div className="flex-1 rounded-[2rem] glass border border-white/15 bg-black/20 flex flex-col items-center justify-center p-8 text-center min-h-[300px]">
                 <Sparkles className="w-10 h-10 text-white/20 mb-3 animate-pulse" />
                 <h3 className="text-[14px] font-semibold text-white/80">No active design selected</h3>
-                <p className="text-[11px] text-white/40 mt-1 max-w-[280px]">
+                <p className="text-[11px] text-white/45 mt-1 max-w-[280px]">
                   Select one of the designs in the gallery below or upload a new photo to start the visualization.
                 </p>
               </div>

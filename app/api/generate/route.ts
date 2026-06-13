@@ -1,6 +1,8 @@
 import { getAuthContext, initStorage } from '@/lib/supabase-server';
 import { buildPrompt } from '@/lib/prompt-builder';
 import { generateInteriorDesign } from '@/lib/gemini';
+import { validateGenerateInput } from '@/lib/validate';
+import { revalidatePath } from 'next/cache';
 import {
   apiSuccess,
   apiError,
@@ -8,6 +10,8 @@ import {
   apiBadRequest,
   apiServerError
 } from '@/lib/api-response';
+
+export const maxDuration = 60;
 
 type GenerationRow = {
   id: string;
@@ -23,16 +27,8 @@ type GenerationRow = {
   created_at: string;
 };
 
-// Allowed constant values for validation
-const ALLOWED_ROOM_TYPES = ['living_room', 'bedroom', 'kitchen', 'bathroom', 'home_office'];
-const ALLOWED_STYLES = ['minimalist', 'japandi', 'industrial', 'bohemian', 'scandinavian'];
-const ALLOWED_PALETTES = ['neutral', 'warm', 'cool', 'bold'];
-const ALLOWED_MIME_TYPES = ['image/jpeg', 'image/png', 'image/webp'];
-
 export async function POST(request: Request) {
   try {
-    await initStorage();
-
     const auth = await getAuthContext(request);
     if (!auth) {
       return apiUnauthorized();
@@ -53,62 +49,29 @@ export async function POST(request: Request) {
     const palette = formData.get('palette') as string | null;
     const notes = formData.get('notes') as string | null;
 
-    // Check missing params
-    if ((!room_photo && !reuse_image_url) || !room_type || !style || !palette) {
-      const missing = [];
-      if (!room_photo && !reuse_image_url) missing.push('room_photo or reuse_image_url');
-      if (!room_type) missing.push('room_type');
-      if (!style) missing.push('style');
-      if (!palette) missing.push('palette');
+    // Run first stage input validation BEFORE any Supabase/Gemini calls
+    const initialValidation = validateGenerateInput({
+      room_type,
+      style,
+      palette,
+      notes,
+      room_photo,
+      reuse_image_url
+    });
 
-      console.log('Validation failed: Missing parameters', { missing });
-      return apiBadRequest(`Invalid parameters: Missing ${missing.join(', ')}`);
+    if (!initialValidation.isValid && initialValidation.error) {
+      return apiError(
+        initialValidation.error.message,
+        initialValidation.error.code,
+        initialValidation.error.status
+      );
     }
 
-    // Check valid room_type, style, palette constants
-    const invalidConstants = [];
-    if (!ALLOWED_ROOM_TYPES.includes(room_type)) invalidConstants.push(`room_type (${room_type})`);
-    if (!ALLOWED_STYLES.includes(style)) invalidConstants.push(`style (${style})`);
-    if (!ALLOWED_PALETTES.includes(palette)) invalidConstants.push(`palette (${palette})`);
-
-    if (invalidConstants.length > 0) {
-      console.log('Validation failed: Invalid constant values', { invalidConstants });
-      return apiBadRequest(`Invalid parameters: Invalid values for ${invalidConstants.join(', ')}`);
-    }
-
-    // Check notes length
-    if (notes && notes.length > 200) {
-      console.log('Validation failed: Notes too long', { notesLength: notes.length });
-      return apiBadRequest('Notes must be 200 characters or less', 'NOTES_TOO_LONG');
-    }
-
+    // Prepare image buffer & content type variables
     let imageBuffer: Buffer;
     let mimeType: string;
 
-    const minSize = 50 * 1024; // 50KB
-    const maxSize = 10 * 1024 * 1024; // 10MB
-
     if (room_photo) {
-      // Check file mime type
-      if (!ALLOWED_MIME_TYPES.includes(room_photo.type)) {
-        console.log('Validation failed: Invalid MIME type', {
-          fileName: room_photo.name,
-          type: room_photo.type
-        });
-        return apiBadRequest(`Invalid parameters: Unsupported image type (${room_photo.type}). Only JPEG, PNG, and WebP are allowed.`);
-      }
-
-      // Check file size (50KB to 10MB)
-      if (room_photo.size > maxSize) {
-        console.log('Validation failed: File too large', { size: room_photo.size });
-        return apiBadRequest('Max file size is 10MB', 'FILE_TOO_LARGE');
-      }
-      if (room_photo.size < minSize) {
-        console.log('Validation failed: File too small', { size: room_photo.size });
-        return apiBadRequest('Image too small or dark', 'FILE_TOO_SMALL');
-      }
-
-      // Convert file to Buffer
       const arrayBuffer = await room_photo.arrayBuffer();
       imageBuffer = Buffer.from(arrayBuffer);
       mimeType = room_photo.type;
@@ -121,130 +84,214 @@ export async function POST(request: Request) {
           return apiBadRequest('Failed to fetch the original image for redesign. Ensure the URL is valid.');
         }
         const contentType = res.headers.get('content-type') || 'image/jpeg';
-        if (!ALLOWED_MIME_TYPES.includes(contentType)) {
-          return apiBadRequest(`Unsupported image type (${contentType}). Only JPEG, PNG, and WebP are allowed.`);
-        }
         const arrayBuffer = await res.arrayBuffer();
         imageBuffer = Buffer.from(arrayBuffer);
         mimeType = contentType;
-
-        // Check size on fetched buffer
-        if (imageBuffer.length > maxSize) {
-          return apiBadRequest('Max file size is 10MB', 'FILE_TOO_LARGE');
-        }
-        if (imageBuffer.length < minSize) {
-          return apiBadRequest('Image too small or dark', 'FILE_TOO_SMALL');
-        }
       } catch (fetchErr) {
         console.error('Error fetching reuse image URL:', fetchErr);
         return apiServerError('Error accessing original image for redesign', 'IMAGE_FETCH_ERROR');
+      }
+
+      // Run validation on fetched image details
+      const fetchedValidation = validateGenerateInput(
+        {
+          room_type,
+          style,
+          palette,
+          notes,
+          room_photo: null,
+          reuse_image_url
+        },
+        { buffer: imageBuffer, mimeType }
+      );
+
+      if (!fetchedValidation.isValid && fetchedValidation.error) {
+        return apiError(
+          fetchedValidation.error.message,
+          fetchedValidation.error.code,
+          fetchedValidation.error.status
+        );
       }
     } else {
       return apiBadRequest('Missing room photo or image URL');
     }
 
-    const uuid = crypto.randomUUID();
+    // Now, validate is complete. Set up Streaming using ReadableStream/TransformStream
+    const { readable, writable } = new TransformStream();
+    const writer = writable.getWriter();
+    const encoder = new TextEncoder();
 
-    // Upload original image to Supabase Storage
-    const originalPath = `${userId}/${uuid}-original.jpg`;
-    const { error: uploadOrigError } = await scopedClient
-      .storage
-      .from('room-uploads')
-      .upload(originalPath, imageBuffer, {
-        contentType: mimeType,
-        upsert: true
-      });
+    const sendProgress = (stepMessage: string) => {
+      writer.write(
+        encoder.encode(JSON.stringify({ status: 'progress', message: stepMessage }) + '\n')
+      );
+    };
 
-    if (uploadOrigError) {
-      console.error('Error uploading original image:', uploadOrigError);
-      return apiServerError('Server error, please try again', 'STORAGE_UPLOAD_ERROR');
-    }
+    const sendSuccess = (data: any) => {
+      writer.write(
+        encoder.encode(JSON.stringify({ status: 'success', data }) + '\n')
+      );
+    };
 
-    const promptBuilt = buildPrompt(room_type, style, palette, notes);
+    const sendError = (message: string, code: string, statusCode: number) => {
+      writer.write(
+        encoder.encode(JSON.stringify({ status: 'error', message, code, statusCode }) + '\n')
+      );
+    };
 
-    let resultBuffer: Buffer;
-    try {
-      resultBuffer = await generateInteriorDesign(imageBuffer, mimeType, promptBuilt);
-    } catch (err: unknown) {
-      console.error('Gemini generation error:', err);
-      const errorMsg = err instanceof Error ? err.message : '';
+    // Process asynchronously in background and resolve stream chunks
+    (async () => {
+      try {
+        // Step 1: Initialize storage client
+        sendProgress('Preparing storage...');
+        await initStorage();
 
-      if (errorMsg === 'TIMEOUT') {
-        return apiError('AI is busy, try again later', 'TIMEOUT', 504);
+        // Step 2: Upload original image
+        sendProgress('Uploading original room photo...');
+        const uuid = crypto.randomUUID();
+        const originalPath = `${userId}/${uuid}-original.jpg`;
+        const { error: uploadOrigError } = await scopedClient
+          .storage
+          .from('room-uploads')
+          .upload(originalPath, imageBuffer, {
+            contentType: mimeType,
+            upsert: true
+          });
+
+        if (uploadOrigError) {
+          console.error('Error uploading original image:', uploadOrigError);
+          sendError('Server error, please try again', 'STORAGE_UPLOAD_ERROR', 500);
+          return;
+        }
+
+        // Step 3: Call Gemini AI
+        sendProgress('Redesigning room with Gemini AI...');
+        const promptBuilt = buildPrompt(room_type!, style!, palette!, notes);
+
+        let resultBuffer: Buffer | null = null;
+        let attempts = 0;
+        const maxAttempts = 2; // Initial try + 1 retry
+
+        while (attempts < maxAttempts) {
+          try {
+            attempts++;
+            resultBuffer = await generateInteriorDesign(imageBuffer, mimeType, promptBuilt);
+            break;
+          } catch (err: unknown) {
+            const errorMsg = err instanceof Error ? err.message : '';
+            const isLastAttempt = attempts >= maxAttempts;
+            const isEmptyResponse = errorMsg === 'EMPTY_RESPONSE';
+
+            if (isEmptyResponse && !isLastAttempt) {
+              console.warn(`[API] Gemini returned EMPTY_RESPONSE. Retrying attempt ${attempts + 1}...`);
+              continue;
+            }
+
+            console.error('Gemini generation error after attempts:', attempts, err);
+            if (errorMsg === 'TIMEOUT') {
+              sendError('AI is busy, try again later', 'TIMEOUT', 504);
+            } else if (errorMsg === 'EMPTY_RESPONSE') {
+              sendError('Image could not be processed', 'EMPTY_RESPONSE', 422);
+            } else if (errorMsg.includes('429') || errorMsg.includes('Quota exceeded')) {
+              sendError(
+                'AI rate limit or quota exceeded. Please wait a moment before trying again.',
+                'RATE_LIMIT_ERROR',
+                429
+              );
+            } else {
+              sendError(`AI Generation failed: ${errorMsg || 'Unknown error'}`, 'GENERATION_ERROR', 500);
+            }
+            return;
+          }
+        }
+
+        if (!resultBuffer) {
+          sendError('Image could not be processed', 'EMPTY_RESPONSE', 422);
+          return;
+        }
+
+        // Step 4: Upload resulting image
+        sendProgress('Saving redesign results...');
+        const resultPath = `${userId}/${uuid}-result.jpg`;
+        const { error: uploadResultError } = await scopedClient
+          .storage
+          .from('room-results')
+          .upload(resultPath, resultBuffer, {
+            contentType: 'image/jpeg',
+            upsert: true
+          });
+
+        if (uploadResultError) {
+          console.error('Error uploading result image:', uploadResultError);
+          sendError('Server error, please try again', 'STORAGE_UPLOAD_ERROR', 500);
+          return;
+        }
+
+        // Get public URLs
+        const { data: { publicUrl: originalUrl } } = scopedClient
+          .storage
+          .from('room-uploads')
+          .getPublicUrl(originalPath);
+
+        const { data: { publicUrl: resultUrl } } = scopedClient
+          .storage
+          .from('room-results')
+          .getPublicUrl(resultPath);
+
+        // Step 5: Insert record to generations DB table
+        const { data: row, error: insertError } = await scopedClient
+          .from('generations')
+          .insert({
+            user_id: userId,
+            room_type: room_type!,
+            style: style!,
+            palette: palette!,
+            notes: notes || null,
+            prompt_built: promptBuilt,
+            original_url: originalUrl,
+            result_url: resultUrl,
+            status: 'completed'
+          })
+          .select()
+          .single<GenerationRow>();
+
+        if (insertError) {
+          console.error('Error inserting generation record:', insertError);
+          sendError('Server error, please try again', 'DATABASE_ERROR', 500);
+          return;
+        }
+
+        // Revalidate the gallery route so that the UI can automatically pull the updated list
+        revalidatePath('/api/gallery');
+
+        // Step 6: Return success
+        sendSuccess({
+          id: row.id,
+          original_url: row.original_url,
+          result_url: row.result_url,
+          prompt_built: row.prompt_built,
+          room_type: row.room_type,
+          style: row.style,
+          palette: row.palette,
+          notes: row.notes,
+          status: row.status,
+          created_at: row.created_at
+        });
+
+      } catch (asyncErr: unknown) {
+        console.error('Unexpected error in streaming backend runner:', asyncErr);
+        sendError('Server error, please try again', 'UNEXPECTED_ERROR', 500);
+      } finally {
+        writer.close();
       }
-      if (errorMsg === 'EMPTY_RESPONSE') {
-        return apiError('Image could not be processed', 'EMPTY_RESPONSE', 422);
+    })();
+
+    return new Response(readable, {
+      headers: {
+        'Content-Type': 'text/event-stream',
+        'Cache-Control': 'no-cache, no-transform',
+        'Connection': 'keep-alive',
       }
-      if (errorMsg.includes('429') || errorMsg.includes('Quota exceeded')) {
-        return apiError(
-          'AI rate limit or quota exceeded. Please wait a moment before trying again.',
-          'RATE_LIMIT_ERROR',
-          429
-        );
-      }
-      return apiServerError(`AI Generation failed: ${errorMsg || 'Unknown error'}`, 'GENERATION_ERROR');
-    }
-
-    // Upload result image to Supabase Storage
-    const resultPath = `${userId}/${uuid}-result.jpg`;
-    const { error: uploadResultError } = await scopedClient
-      .storage
-      .from('room-results')
-      .upload(resultPath, resultBuffer, {
-        contentType: 'image/jpeg',
-        upsert: true
-      });
-
-    if (uploadResultError) {
-      console.error('Error uploading result image:', uploadResultError);
-      return apiServerError('Server error, please try again', 'STORAGE_UPLOAD_ERROR');
-    }
-
-    // Get Public URLs
-    const { data: { publicUrl: originalUrl } } = scopedClient
-      .storage
-      .from('room-uploads')
-      .getPublicUrl(originalPath);
-
-    const { data: { publicUrl: resultUrl } } = scopedClient
-      .storage
-      .from('room-results')
-      .getPublicUrl(resultPath);
-
-    // Insert record into generations table
-    const { data: row, error: insertError } = await scopedClient
-      .from('generations')
-      .insert({
-        user_id: userId,
-        room_type: room_type,
-        style: style,
-        palette: palette,
-        notes: notes || null,
-        prompt_built: promptBuilt,
-        original_url: originalUrl,
-        result_url: resultUrl,
-        status: 'completed'
-      })
-      .select()
-      .single<GenerationRow>();
-
-    if (insertError) {
-      console.error('Error inserting generation record:', insertError);
-      return apiServerError('Server error, please try again', 'DATABASE_ERROR');
-    }
-
-    // Return completed response
-    return apiSuccess({
-      id: row.id,
-      original_url: row.original_url,
-      result_url: row.result_url,
-      prompt_built: row.prompt_built,
-      room_type: row.room_type,
-      style: row.style,
-      palette: row.palette,
-      notes: row.notes,
-      status: row.status,
-      created_at: row.created_at
     });
 
   } catch (error: unknown) {
