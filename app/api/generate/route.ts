@@ -146,63 +146,90 @@ export async function POST(request: Request) {
         sendProgress('Preparing storage...');
         await initStorage();
 
-        // Step 2: Upload original image
-        sendProgress('Uploading original room photo...');
         const uuid = crypto.randomUUID();
         const originalPath = `${userId}/${uuid}-original.jpg`;
-        const { error: uploadOrigError } = await scopedClient
-          .storage
-          .from('room-uploads')
-          .upload(originalPath, imageBuffer, {
-            contentType: mimeType,
-            upsert: true
-          });
-
-        if (uploadOrigError) {
-          console.error('Error uploading original image:', uploadOrigError);
-          sendError('Server error, please try again', 'STORAGE_UPLOAD_ERROR', 500);
-          return;
-        }
-
-        // Step 3: Call Gemini AI
-        sendProgress('Redesigning room with Gemini AI...');
         const promptBuilt = buildPrompt(room_type!, style!, palette!, notes);
 
+        // Step 2 & 3: Upload original image & generate redesign in parallel
+        sendProgress('Uploading original room photo & redesigning room with Gemini AI...');
+
+        let uploadSucceeded = false;
+        let uploadError: any = null;
         let resultBuffer: Buffer | null = null;
-        let attempts = 0;
-        const maxAttempts = 2; // Initial try + 1 retry
 
-        while (attempts < maxAttempts) {
-          try {
-            attempts++;
-            resultBuffer = await generateInteriorDesign(imageBuffer, mimeType, promptBuilt);
-            break;
-          } catch (err: unknown) {
-            const errorMsg = err instanceof Error ? err.message : '';
-            const isLastAttempt = attempts >= maxAttempts;
-            const isEmptyResponse = errorMsg === 'EMPTY_RESPONSE';
+        const uploadPromise = (async () => {
+          const { error } = await scopedClient
+            .storage
+            .from('room-uploads')
+            .upload(originalPath, imageBuffer, {
+              contentType: mimeType,
+              upsert: true
+            });
+          if (error) {
+            uploadError = error;
+            throw error;
+          }
+          uploadSucceeded = true;
+        })();
 
-            if (isEmptyResponse && !isLastAttempt) {
-              console.warn(`[API] Gemini returned EMPTY_RESPONSE. Retrying attempt ${attempts + 1}...`);
-              continue;
+        const geminiPromise = (async () => {
+          let attempts = 0;
+          const maxAttempts = 2; // Initial try + 1 retry
+
+          while (attempts < maxAttempts) {
+            try {
+              attempts++;
+              return await generateInteriorDesign(imageBuffer, mimeType, promptBuilt);
+            } catch (err: unknown) {
+              const errorMsg = err instanceof Error ? err.message : '';
+              const isLastAttempt = attempts >= maxAttempts;
+              const isEmptyResponse = errorMsg === 'EMPTY_RESPONSE';
+
+              if (isEmptyResponse && !isLastAttempt) {
+                console.warn(`[API] Gemini returned EMPTY_RESPONSE. Retrying attempt ${attempts + 1}...`);
+                continue;
+              }
+              throw err;
             }
+          }
+          throw new Error('EMPTY_RESPONSE');
+        })();
 
-            console.error('Gemini generation error after attempts:', attempts, err);
-            if (errorMsg === 'TIMEOUT') {
-              sendError('AI is busy, try again later', 'TIMEOUT', 504);
-            } else if (errorMsg === 'EMPTY_RESPONSE') {
-              sendError('Image could not be processed', 'EMPTY_RESPONSE', 422);
-            } else if (errorMsg.includes('429') || errorMsg.includes('Quota exceeded')) {
-              sendError(
-                'AI rate limit or quota exceeded. Please wait a moment before trying again.',
-                'RATE_LIMIT_ERROR',
-                429
-              );
-            } else {
-              sendError(`AI Generation failed: ${errorMsg || 'Unknown error'}`, 'GENERATION_ERROR', 500);
-            }
+        try {
+          const [, geminiRes] = await Promise.all([uploadPromise, geminiPromise]);
+          resultBuffer = geminiRes;
+        } catch (err: unknown) {
+          if (uploadError) {
+            console.error('Error uploading original image:', uploadError);
+            sendError('Server error, please try again', 'STORAGE_UPLOAD_ERROR', 500);
             return;
           }
+
+          if (uploadSucceeded) {
+            console.log('Gemini failed after upload succeeded, cleaning up original image...');
+            try {
+              await scopedClient.storage.from('room-uploads').remove([originalPath]);
+            } catch (cleanupErr) {
+              console.error('Failed to clean up orphaned original image:', cleanupErr);
+            }
+          }
+
+          const errorMsg = err instanceof Error ? err.message : '';
+          console.error('Gemini generation error:', err);
+          if (errorMsg === 'TIMEOUT') {
+            sendError('AI is busy, try again later', 'TIMEOUT', 504);
+          } else if (errorMsg === 'EMPTY_RESPONSE') {
+            sendError('Image could not be processed', 'EMPTY_RESPONSE', 422);
+          } else if (errorMsg.includes('429') || errorMsg.includes('Quota exceeded')) {
+            sendError(
+              'AI rate limit or quota exceeded. Please wait a moment before trying again.',
+              'RATE_LIMIT_ERROR',
+              429
+            );
+          } else {
+            sendError(`AI Generation failed: ${errorMsg || 'Unknown error'}`, 'GENERATION_ERROR', 500);
+          }
+          return;
         }
 
         if (!resultBuffer) {
@@ -210,13 +237,18 @@ export async function POST(request: Request) {
           return;
         }
 
-        // Step 4: Upload resulting image
+        // Step 4: Upload resulting image using ArrayBuffer
         sendProgress('Saving redesign results...');
         const resultPath = `${userId}/${uuid}-result.jpg`;
+        const resultUploadData = resultBuffer.buffer.slice(
+          resultBuffer.byteOffset,
+          resultBuffer.byteOffset + resultBuffer.byteLength
+        ) as ArrayBuffer;
+
         const { error: uploadResultError } = await scopedClient
           .storage
           .from('room-results')
-          .upload(resultPath, resultBuffer, {
+          .upload(resultPath, resultUploadData, {
             contentType: 'image/jpeg',
             upsert: true
           });
@@ -227,7 +259,8 @@ export async function POST(request: Request) {
           return;
         }
 
-        // Get public URLs
+        // Note on URL signing: The 'room-uploads' and 'room-results' buckets are configured as public (public: true in initStorage),
+        // so public URLs can be fetched directly via getPublicUrl without needing to generate signed URLs.
         const { data: { publicUrl: originalUrl } } = scopedClient
           .storage
           .from('room-uploads')
