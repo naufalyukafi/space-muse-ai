@@ -259,7 +259,7 @@ export async function POST(request: Request) {
       const promptBuilt = buildPrompt(room_type!, style!, palette!, notes);
 
       // Step 2 & 3: Upload original image & generate redesign in parallel
-      sendProgress('Uploading original room photo & redesigning room with Gemini AI...');
+      sendProgress('Redesigning room with our AI engine...');
 
       let uploadSucceeded = false;
       let uploadError: unknown = null;
@@ -328,7 +328,7 @@ export async function POST(request: Request) {
       }
 
       // Step 4: Upload resulting image using ArrayBuffer
-      sendProgress('Saving redesign results...');
+      sendProgress('Saving redesigned room...');
       const resultPath = `${userId}/${uuid}-result.jpg`;
       const resultUploadData = resultBuffer.buffer.slice(
         resultBuffer.byteOffset,

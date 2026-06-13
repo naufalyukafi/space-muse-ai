@@ -65,7 +65,7 @@ export function GeneratorForm({
   onError,
   fileInputRef,
 }: GeneratorFormProps) {
-  
+
   const handleNotesChange = (e: React.ChangeEvent<HTMLTextAreaElement>) => {
     const value = e.target.value;
     if (value.length <= 200) {
@@ -164,25 +164,26 @@ export function GeneratorForm({
       </div>
 
       {/* Submit Action Button */}
-      <button
-        type="submit"
-        disabled={isGenerating}
-        className={`mt-2 btn-generate w-full py-4 rounded-[1.5rem] text-[13px] font-bold flex items-center justify-center gap-2 shadow-[0_0_20px_rgba(255,255,255,0.15)] text-black cursor-pointer select-none active:scale-[0.98] transition-transform duration-150 ${
-          isGenerating ? 'opacity-80 cursor-not-allowed scale-[0.98]' : 'hover:scale-[1.01]'
-        }`}
-      >
-        {isGenerating ? (
-          <>
-            <Loader2 className="animate-spin w-4 h-4" />
-            Redesigning Your Room...
-          </>
-        ) : (
-          <>
-            <Sparkles className="w-4 h-4" />
-            Visualize Now
-          </>
-        )}
-      </button>
+      <div className="flex flex-col gap-2 mt-2">
+        <button
+          type="submit"
+          disabled={isGenerating}
+          className={`btn-generate w-full py-4 rounded-[1.5rem] text-[13px] font-bold flex items-center justify-center gap-2 shadow-[0_0_20px_rgba(255,255,255,0.15)] text-black cursor-pointer select-none active:scale-[0.98] transition-transform duration-150 ${isGenerating ? 'opacity-80 cursor-not-allowed scale-[0.98]' : 'hover:scale-[1.01]'
+            }`}
+        >
+          {isGenerating ? (
+            <>
+              <Loader2 className="animate-spin w-4 h-4" />
+              Redesigning Your Room...
+            </>
+          ) : (
+            <>
+              <Sparkles className="w-4 h-4" />
+              Visualize Now
+            </>
+          )}
+        </button>
+      </div>
     </form>
   );
 }

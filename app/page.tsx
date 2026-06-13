@@ -46,6 +46,7 @@ export default function Home() {
 
   const [activeGen, setActiveGen] = useState<Generation | null>(null);
   const [isGenerating, setIsGenerating] = useState(false);
+  const [loadingPreviewUrl, setLoadingPreviewUrl] = useState<string | null>(null);
   const [progressMessage, setProgressMessage] = useState('');
   const [loadingGallery, setLoadingGallery] = useState(true);
   const [error, setError] = useState<{ message: string; code: string } | null>(null);
@@ -111,8 +112,6 @@ export default function Home() {
   const handleGenerate = useCallback(async () => {
     if (!session?.access_token || (!selectedFile && !imageUrl)) return;
 
-    setIsGenerating(true);
-    setProgressMessage('Submitting request...');
     handleClearError();
 
     const tempId = 'optimistic-gen-' + Date.now();
@@ -122,6 +121,10 @@ export default function Home() {
     } else if (imageUrl) {
       tempUrl = imageUrl;
     }
+
+    setLoadingPreviewUrl(tempUrl);
+    setIsGenerating(true);
+    setProgressMessage('Submitting request...');
 
     const optimisticGen: Generation = {
       id: tempId,
@@ -234,6 +237,7 @@ export default function Home() {
       } finally {
         setIsGenerating(false);
         setProgressMessage('');
+        setLoadingPreviewUrl(null);
         if (selectedFile && tempUrl.startsWith('blob:')) {
           URL.revokeObjectURL(tempUrl);
         }
@@ -357,25 +361,31 @@ export default function Home() {
           <div className="h-[350px] md:h-[450px] lg:flex-1 lg:min-h-0 flex flex-col">
             {isGenerating ? (
               <div className="flex-1 rounded-[2rem] glass border border-white/10 bg-black/30 flex flex-col items-center justify-center p-8 text-center min-h-[300px] relative overflow-hidden">
-                <div className="shimmer"></div>
+                {/* Background preview image */}
+                {loadingPreviewUrl && (
+                  <div
+                    className="absolute inset-0 bg-cover bg-center transition-all duration-700"
+                    style={{ backgroundImage: `url(${loadingPreviewUrl})` }}
+                  />
+                )}
+                {/* Dark overlay & blur */}
+                <div className="absolute inset-0 bg-black/35 backdrop-blur-[2px]"></div>
 
-                {/* Visualizer split mockup */}
-                <div className="absolute inset-y-0 left-1/2 w-[1px] bg-white/10 pointer-events-none">
-                  <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-10 h-10 rounded-full bg-[#121214]/85 border border-white/15 flex items-center justify-center text-white/35 backdrop-blur-md">
-                    <ArrowLeftRight className="w-4 h-4 text-pink-300 animate-pulse" />
-                  </div>
-                </div>
+                {/* Premium Loading Card */}
+                <div className="z-20 flex flex-col items-center gap-3 bg-black/55 backdrop-blur-xl border border-white/10 p-6 rounded-[2rem] max-w-[300px] shadow-2xl relative overflow-hidden">
+                  {/* Subtle ambient blur orbs */}
+                  <div className="absolute -top-12 -left-12 w-20 h-20 rounded-full bg-pink-500/10 blur-xl pointer-events-none"></div>
+                  <div className="absolute -bottom-12 -right-12 w-20 h-20 rounded-full bg-blue-500/10 blur-xl pointer-events-none"></div>
 
-                <div className="z-10 flex flex-col items-center gap-4">
-                  <div className="w-16 h-16 rounded-full bg-gradient-to-tr from-pink-500/10 to-blue-500/10 flex items-center justify-center border border-white/10 shadow-lg">
-                    <Loader2 className="w-6 h-6 text-pink-300 animate-spin" />
-                  </div>
-                  <div>
-                    <h3 className="text-[14px] font-semibold text-white/85">
+                  {/* Breathing Magic Sphere Loader */}
+                  <div className="w-12 h-12 rounded-full magic-sphere animate-pulse shadow-[0_0_20px_rgba(255,182,193,0.4)] relative z-10 mb-1"></div>
+
+                  <div className="relative z-10 flex flex-col items-center">
+                    <h3 className="text-[13px] font-semibold text-white/95 leading-tight">
                       {progressMessage || 'Transforming your space...'}
                     </h3>
-                    <p className="text-[11px] text-white/45 mt-1.5 max-w-[280px] leading-relaxed">
-                      AI is generating your custom interior design. This usually takes 10-20 seconds.
+                    <p className="text-[10px] text-white/50 mt-2 max-w-[240px] leading-relaxed">
+                      Our AI is custom rendering your new interior design. This process typically takes about 10-20 seconds.
                     </p>
                   </div>
                 </div>

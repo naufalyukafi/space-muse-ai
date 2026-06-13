@@ -68,7 +68,7 @@ export function ErrorBanner({ error, onDismiss }: ErrorBannerProps) {
       title = 'AI Generation Failed';
       if (error.message.includes('401') || error.message.includes('authentication') || error.message.includes('API key') || error.message.includes('invalid authentication credentials')) {
         title = 'AI Authentication Issue';
-        message = 'The AI service returned an authentication error. Please verify that the server has a valid GEMINI_API_KEY.';
+        message = 'The AI service returned an authentication error. Please check the server configuration.';
       } else {
         message = 'We encountered an error generating your design. Please try again in a few moments.';
       }
