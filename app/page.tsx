@@ -113,7 +113,7 @@ export default function Home() {
         setActiveGen((current) => current || SAMPLE_GENERATIONS[0]);
       }
     }
-  }, [authLoading, session, fetchGallery]);
+  }, [authLoading, session?.access_token, fetchGallery]);
 
   // Handle errors triggered by components
   const handleError = useCallback((message: string, code: string) => {
