@@ -153,3 +153,50 @@ export function validateGenerateInput(
 
   return { isValid: true };
 }
+
+/**
+ * Validates the file magic bytes of the image buffer against allowed formats.
+ * Allowed formats: JPEG (FF D8 FF), PNG (89 50 4E 47 0D 0A 1A 0A), and WebP (RIFF / WEBP).
+ */
+export async function validateFileBytes(buffer: Buffer): Promise<boolean> {
+  if (buffer.length < 12) {
+    return false;
+  }
+  const header = buffer.subarray(0, 12);
+
+  // JPEG check: FF D8 FF
+  if (header[0] === 0xFF && header[1] === 0xD8 && header[2] === 0xFF) {
+    return true;
+  }
+
+  // PNG check: 89 50 4E 47 0D 0A 1A 0A
+  if (
+    header[0] === 0x89 &&
+    header[1] === 0x50 &&
+    header[2] === 0x4E &&
+    header[3] === 0x47 &&
+    header[4] === 0x0D &&
+    header[5] === 0x0A &&
+    header[6] === 0x1A &&
+    header[7] === 0x0A
+  ) {
+    return true;
+  }
+
+  // WebP check: RIFF (bytes 0-3) and WEBP (bytes 8-11)
+  if (
+    header[0] === 0x52 && // R
+    header[1] === 0x49 && // I
+    header[2] === 0x46 && // F
+    header[3] === 0x46 && // F
+    header[8] === 0x57 && // W
+    header[9] === 0x45 && // E
+    header[10] === 0x42 && // B
+    header[11] === 0x50  // P
+  ) {
+    return true;
+  }
+
+  return false;
+}
+

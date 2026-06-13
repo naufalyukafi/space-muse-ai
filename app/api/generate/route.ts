@@ -1,7 +1,7 @@
 import { getAuthContext, initStorage } from '@/lib/supabase-server';
 import { buildPrompt } from '@/lib/prompt-builder';
 import { generateInteriorDesign } from '@/lib/gemini';
-import { validateGenerateInput } from '@/lib/validate';
+import { validateGenerateInput, validateFileBytes } from '@/lib/validate';
 import { revalidatePath } from 'next/cache';
 import {
   apiError,
@@ -11,6 +11,8 @@ import {
 } from '@/lib/api-response';
 import { resizeForGemini } from '@/lib/resize-image';
 import { createHash } from 'crypto';
+import { checkRateLimit } from '@/lib/rate-limit';
+import { NextResponse } from 'next/server';
 
 export const maxDuration = 60;
 
@@ -41,6 +43,20 @@ export async function POST(request: Request) {
       return apiUnauthorized();
     }
     const { userId, scopedClient } = auth;
+
+    // Call checkRateLimit(userId) immediately after getting userId, before any validation or IO
+    const rateLimit = checkRateLimit(userId);
+    if (!rateLimit.allowed) {
+      return NextResponse.json(
+        { error: 'RATE_LIMITED', message: 'Too many requests. Please try again later.' },
+        {
+          status: 429,
+          headers: {
+            'Retry-After': String(rateLimit.retryAfter),
+          },
+        }
+      );
+    }
 
     let formData: FormData;
     try {
@@ -121,6 +137,12 @@ export async function POST(request: Request) {
       }
     } else {
       return apiBadRequest('Missing room photo or image URL');
+    }
+
+    // Validate image file content using magic bytes signature validation
+    const isValidBytes = await validateFileBytes(imageBuffer);
+    if (!isValidBytes) {
+      return apiError('Invalid image file', 'INVALID_PARAMS', 400);
     }
 
     // Generate deduplication key based on SHA-256 hash of: userId + roomType + style + palette + file size in bytes (original)
