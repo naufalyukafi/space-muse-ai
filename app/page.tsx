@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect, useCallback, useOptimistic, startTransition, useRef } from 'react';
 import { ArrowLeftRight, Sparkles, Loader2 } from 'lucide-react';
 import { useAuth } from '@/components/AuthProvider';
 import { GeneratorForm } from '@/components/GeneratorForm';
@@ -26,6 +26,8 @@ const handleUploadPlaceholderClick = () => {
 export default function Home() {
   const { session, loading: authLoading } = useAuth();
 
+  const fileInputRef = useRef<HTMLInputElement | null>(null);
+
   // Form State
   const [roomType, setRoomType] = useState('living_room');
   const [style, setStyle] = useState('minimalist');
@@ -36,6 +38,12 @@ export default function Home() {
 
   // Gallery & UI State
   const [generations, setGenerations] = useState<Generation[]>([]);
+
+  const [optimisticGenerations, addOptimisticGeneration] = useOptimistic(
+    generations,
+    (state, newGen: Generation) => [newGen, ...state]
+  );
+
   const [activeGen, setActiveGen] = useState<Generation | null>(null);
   const [isGenerating, setIsGenerating] = useState(false);
   const [progressMessage, setProgressMessage] = useState('');
@@ -91,120 +99,160 @@ export default function Home() {
   }, [authLoading, session, fetchGallery]);
 
   // Handle errors triggered by components
-  const handleError = (message: string, code: string) => {
+  const handleError = useCallback((message: string, code: string) => {
     setError({ message, code });
-  };
+  }, []);
 
-  const handleClearError = () => {
+  const handleClearError = useCallback(() => {
     setError(null);
-  };
+  }, []);
 
   // Form Submit (Generation Flow)
-  const handleGenerate = async () => {
+  const handleGenerate = useCallback(async () => {
     if (!session?.access_token || (!selectedFile && !imageUrl)) return;
 
     setIsGenerating(true);
     setProgressMessage('Submitting request...');
     handleClearError();
 
-    const formData = new FormData();
+    const tempId = 'optimistic-gen-' + Date.now();
+    let tempUrl = '';
     if (selectedFile) {
-      formData.append('room_photo', selectedFile);
+      tempUrl = URL.createObjectURL(selectedFile);
     } else if (imageUrl) {
-      formData.append('reuse_image_url', imageUrl);
-    }
-    formData.append('room_type', roomType);
-    formData.append('style', style);
-    formData.append('palette', palette);
-    if (notes.trim()) {
-      formData.append('notes', notes.trim());
+      tempUrl = imageUrl;
     }
 
-    try {
-      const res = await fetch('/api/generate', {
-        method: 'POST',
-        headers: {
-          Authorization: `Bearer ${session.access_token}`,
-        },
-        body: formData,
-      });
+    const optimisticGen: Generation = {
+      id: tempId,
+      original_url: tempUrl,
+      result_url: '',
+      room_type: roomType,
+      style: style,
+      palette: palette,
+      notes: notes.trim() || null,
+      status: 'generating',
+      created_at: new Date().toISOString()
+    };
 
-      const contentType = res.headers.get('content-type') || '';
-      if (!res.ok && !contentType.includes('text/event-stream')) {
-        const json = await res.json();
-        handleError(
-          json.message || 'Failed to redesign room. Please try again.',
-          json.code || 'GENERATION_ERROR'
-        );
-        return;
+    startTransition(async () => {
+      addOptimisticGeneration(optimisticGen);
+
+      const formData = new FormData();
+      if (selectedFile) {
+        formData.append('room_photo', selectedFile);
+      } else if (imageUrl) {
+        formData.append('reuse_image_url', imageUrl);
+      }
+      formData.append('room_type', roomType);
+      formData.append('style', style);
+      formData.append('palette', palette);
+      if (notes.trim()) {
+        formData.append('notes', notes.trim());
       }
 
-      const reader = res.body?.getReader();
-      if (!reader) {
-        throw new Error('No stream reader found');
-      }
+      try {
+        const res = await fetch('/api/generate', {
+          method: 'POST',
+          headers: {
+            Authorization: `Bearer ${session.access_token}`,
+          },
+          body: formData,
+        });
 
-      const decoder = new TextDecoder();
-      let buffer = '';
-      let successData = null;
+        const contentType = res.headers.get('content-type') || '';
+        if (!res.ok && !contentType.includes('text/event-stream')) {
+          const json = await res.json();
+          handleError(
+            json.message || 'Failed to redesign room. Please try again.',
+            json.code || 'GENERATION_ERROR'
+          );
+          return;
+        }
 
-      while (true) {
-        const { done, value } = await reader.read();
-        if (done) break;
+        const reader = res.body?.getReader();
+        if (!reader) {
+          throw new Error('No stream reader found');
+        }
 
-        buffer += decoder.decode(value, { stream: true });
-        const lines = buffer.split('\n');
-        buffer = lines.pop() || '';
+        const decoder = new TextDecoder();
+        let buffer = '';
+        let successData = null;
 
-        for (const line of lines) {
-          if (!line.trim()) continue;
-          try {
-            const json = JSON.parse(line);
-            if (json.status === 'progress') {
-              setProgressMessage(json.message);
-            } else if (json.status === 'success') {
-              successData = json.data;
-            } else if (json.status === 'error') {
-              throw { message: json.message, code: json.code || 'GENERATION_ERROR' };
+        while (true) {
+          const { done, value } = await reader.read();
+          if (done) break;
+
+          buffer += decoder.decode(value, { stream: true });
+          const lines = buffer.split('\n');
+          buffer = lines.pop() || '';
+
+          for (const line of lines) {
+            if (!line.trim()) continue;
+            try {
+              const json = JSON.parse(line);
+              if (json.status === 'progress') {
+                setProgressMessage(json.message);
+              } else if (json.status === 'success') {
+                successData = json.data;
+              } else if (json.status === 'error') {
+                throw { message: json.message, code: json.code || 'GENERATION_ERROR' };
+              }
+            } catch (parseErr) {
+              if (parseErr && typeof parseErr === 'object' && 'code' in parseErr) {
+                throw parseErr;
+              }
+              console.error('Failed to parse line:', line, parseErr);
             }
-          } catch (parseErr) {
-            if (parseErr && typeof parseErr === 'object' && 'code' in parseErr) {
-              throw parseErr;
-            }
-            console.error('Failed to parse line:', line, parseErr);
           }
         }
+
+        if (successData) {
+          const newGen: Generation = successData;
+
+          // Add to front of local list and select
+          setGenerations((prev) => [newGen, ...prev]);
+          setActiveGen(newGen);
+
+          // Reset form inputs (image & notes)
+          setSelectedFile(null);
+          setImageUrl(null);
+          setNotes('');
+          if (fileInputRef.current) {
+            fileInputRef.current.value = '';
+          }
+        } else {
+          throw { message: 'Unexpected end of stream', code: 'GENERATION_ERROR' };
+        }
+
+      } catch (err: any) {
+        console.error('Unexpected generation error:', err);
+        handleError(
+          err.message || 'Server connection error. Please try again in a few moments.',
+          err.code || 'CONNECTION_ERROR'
+        );
+      } finally {
+        setIsGenerating(false);
+        setProgressMessage('');
+        if (selectedFile && tempUrl.startsWith('blob:')) {
+          URL.revokeObjectURL(tempUrl);
+        }
       }
-
-      if (successData) {
-        const newGen: Generation = successData;
-
-        // Add to front of local list and select
-        setGenerations((prev) => [newGen, ...prev]);
-        setActiveGen(newGen);
-
-        // Reset form inputs (image & notes)
-        setSelectedFile(null);
-        setImageUrl(null);
-        setNotes('');
-      } else {
-        throw { message: 'Unexpected end of stream', code: 'GENERATION_ERROR' };
-      }
-
-    } catch (err: any) {
-      console.error('Unexpected generation error:', err);
-      handleError(
-        err.message || 'Server connection error. Please try again in a few moments.',
-        err.code || 'CONNECTION_ERROR'
-      );
-    } finally {
-      setIsGenerating(false);
-      setProgressMessage('');
-    }
-  };
-
+    });
+  }, [
+    session?.access_token,
+    selectedFile,
+    imageUrl,
+    roomType,
+    style,
+    palette,
+    notes,
+    handleClearError,
+    handleError,
+    addOptimisticGeneration
+  ]);
   // Pre-fill form options on click Redesign
-  const handleRedesign = (item: Generation) => {
+  const handleRedesign = useCallback((item: Generation) => {
     setRoomType(item.room_type);
     setStyle(item.style);
     setPalette(item.palette);
@@ -212,7 +260,14 @@ export default function Home() {
     setSelectedFile(null);
     setImageUrl(item.result_url);
     handleClearError();
-  };
+    if (fileInputRef.current) {
+      fileInputRef.current.value = '';
+    }
+  }, [handleClearError]);
+
+  const handleCardSelect = useCallback((item: Generation) => {
+    setActiveGen(item);
+  }, []);
 
 
   if (authLoading) {
@@ -272,6 +327,7 @@ export default function Home() {
               isGenerating={isGenerating}
               onSubmit={handleGenerate}
               onError={handleError}
+              fileInputRef={fileInputRef}
             />
           </div>
         </aside>
@@ -380,9 +436,9 @@ export default function Home() {
             </div>
             <div className="flex-1 min-h-0 w-full overflow-hidden">
               <Gallery
-                generations={generations}
+                generations={optimisticGenerations}
                 activeId={activeGen?.id || null}
-                onCardSelect={(item) => setActiveGen(item)}
+                onCardSelect={handleCardSelect}
                 onRedesignClick={handleRedesign}
                 onUploadClick={handleUploadPlaceholderClick}
                 isLoading={loadingGallery}

@@ -1,6 +1,7 @@
 'use client';
 
 import React from 'react';
+import Image from 'next/image';
 import { RotateCw } from 'lucide-react';
 
 export interface Generation {
@@ -18,8 +19,8 @@ export interface Generation {
 interface GenerationCardProps {
   generation: Generation;
   isActive: boolean;
-  onClick: () => void;
-  onRedesign: (e: React.MouseEvent) => void;
+  onCardSelect: (gen: Generation) => void;
+  onRedesignClick: (gen: Generation) => void;
 }
 
 const ROOM_LABELS: Record<string, string> = {
@@ -38,13 +39,34 @@ const STYLE_LABELS: Record<string, string> = {
   scandinavian: 'Scandinavian',
 };
 
-export function GenerationCard({ generation, isActive, onClick, onRedesign }: GenerationCardProps) {
+export const GenerationCard = React.memo(function GenerationCard({
+  generation,
+  isActive,
+  onCardSelect,
+  onRedesignClick,
+}: GenerationCardProps) {
   const roomLabel = ROOM_LABELS[generation.room_type] || generation.room_type;
   const styleLabel = STYLE_LABELS[generation.style] || generation.style;
 
+  if (generation.status === 'generating') {
+    return (
+      <div className="h-full w-full rounded-[1.5rem] border border-white/5 bg-white/[0.02] flex flex-col justify-end p-3 relative overflow-hidden select-none pointer-events-none animate-pulse">
+        <div className="shimmer"></div>
+        <div className="h-3.5 bg-white/10 rounded w-3/4 mb-1.5 z-10"></div>
+        <div className="h-2.5 bg-white/5 rounded w-1/2 z-10"></div>
+      </div>
+    );
+  }
+
+  const handleClick = () => onCardSelect(generation);
+  const handleRedesign = (e: React.MouseEvent) => {
+    e.stopPropagation();
+    onRedesignClick(generation);
+  };
+
   return (
     <div
-      onClick={onClick}
+      onClick={handleClick}
       className={`relative w-full h-full rounded-[1.5rem] overflow-hidden cursor-pointer hover:-translate-y-1 hover:z-20 transition-all duration-300 group select-none ${
         isActive
           ? 'ring-2 ring-pink-400 border-transparent shadow-[0_0_15px_rgba(244,114,182,0.4)] z-10'
@@ -52,10 +74,15 @@ export function GenerationCard({ generation, isActive, onClick, onRedesign }: Ge
       }`}
     >
       {/* Background image (result) */}
-      <img
+      <Image
         src={generation.result_url}
         alt={`${roomLabel} - ${styleLabel}`}
-        className="w-full h-full object-cover group-hover:scale-110 transition duration-500 pointer-events-none"
+        fill
+        sizes="200px"
+        className="object-cover group-hover:scale-110 transition duration-500 pointer-events-none"
+        loading="lazy"
+        placeholder="blur"
+        blurDataURL="data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHdpZHRoPSI4IiBoZWlnaHQ9IjgiIHZpZXdCb3g9IjAgMCA4IDgiPjxyZWN0IHdpZHRoPSI4IiBoZWlnaHQ9IjgiIGZpbGw9IiMzMzMzMzMiLz48L3N2Zz4="
       />
 
       {/* Info Overlay at the bottom */}
@@ -74,7 +101,7 @@ export function GenerationCard({ generation, isActive, onClick, onRedesign }: Ge
       <div className="absolute inset-0 bg-black/40 opacity-0 group-hover:opacity-100 transition-opacity duration-300 flex items-center justify-center z-20">
         <button
           type="button"
-          onClick={onRedesign}
+          onClick={handleRedesign}
           className="glass px-3 py-1.5 rounded-full text-[10px] font-bold text-white bg-pink-500/20 border-pink-400/30 hover:bg-pink-500/40 hover:scale-105 transition flex items-center gap-1.5 shadow-md"
           title="Use these options to redesign"
         >
@@ -88,4 +115,5 @@ export function GenerationCard({ generation, isActive, onClick, onRedesign }: Ge
       )}
     </div>
   );
-}
+});
+
