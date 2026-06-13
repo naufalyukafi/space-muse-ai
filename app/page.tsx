@@ -290,19 +290,6 @@ export default function Home() {
   }, []);
 
 
-  if (authLoading) {
-    return (
-      <div className="flex-1 flex flex-col items-center justify-center bg-[#121214] text-white">
-        <div className="flex flex-col items-center gap-4">
-          <div className="w-[6rem] h-[6rem] rounded-full magic-sphere animate-pulse"></div>
-          <span className="text-[13px] font-semibold text-white/55 tracking-wider uppercase animate-pulse">
-            Initializing AI Session...
-          </span>
-        </div>
-      </div>
-    );
-  }
-
   return (
     <div className="p-3 gap-3 flex flex-col flex-1 min-h-0 lg:h-full lg:overflow-hidden relative">
       {/* Background glow meshes */}
