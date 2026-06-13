@@ -1,3 +1,5 @@
+import 'server-only';
+
 export interface ValidationError {
   message: string;
   code: string;

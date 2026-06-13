@@ -3,11 +3,27 @@
 import React, { useState, useEffect, useCallback, useOptimistic, startTransition, useRef } from 'react';
 import { ArrowLeftRight, Sparkles, Loader2 } from 'lucide-react';
 import { useAuth } from '@/components/AuthProvider';
-import { GeneratorForm } from '@/components/GeneratorForm';
-import { Gallery, SAMPLE_GENERATIONS } from '@/components/Gallery';
+import { SAMPLE_GENERATIONS } from '@/components/Gallery';
 import { ComparisonSlider } from '@/components/ComparisonSlider';
 import { ErrorBanner } from '@/components/ErrorBanner';
 import type { Generation } from '@/components/GenerationCard';
+import dynamic from 'next/dynamic';
+
+const Gallery = dynamic(
+  () => import('@/components/Gallery').then((mod) => mod.Gallery),
+  {
+    ssr: false,
+    loading: () => <div className="h-[175px] bg-secondary rounded-[1.5rem]" />
+  }
+);
+
+const GeneratorForm = dynamic(
+  () => import('@/components/GeneratorForm').then((mod) => mod.GeneratorForm),
+  {
+    ssr: false,
+    loading: () => <div className="h-[554px] bg-secondary rounded-[1.5rem]" />
+  }
+);
 
 const handleUploadPlaceholderClick = () => {
   // Directly trigger the click event on the hidden file input
@@ -274,19 +290,6 @@ export default function Home() {
   }, []);
 
 
-  if (authLoading) {
-    return (
-      <div className="flex-1 flex flex-col items-center justify-center bg-[#121214] text-white">
-        <div className="flex flex-col items-center gap-4">
-          <div className="w-[6rem] h-[6rem] rounded-full magic-sphere animate-pulse"></div>
-          <span className="text-[13px] font-semibold text-white/55 tracking-wider uppercase animate-pulse">
-            Initializing AI Session...
-          </span>
-        </div>
-      </div>
-    );
-  }
-
   return (
     <div className="p-3 gap-3 flex flex-col flex-1 min-h-0 lg:h-full lg:overflow-hidden relative">
       {/* Background glow meshes */}
@@ -433,7 +436,7 @@ export default function Home() {
           </div>
 
           {/* Gallery Carousel Container */}
-          <div className="h-[185px] shrink-0 overflow-hidden flex flex-col gap-1.5 bg-white/[0.03] border border-white/5 rounded-[1.5rem] p-3">
+          <div className="h-[215px] shrink-0 overflow-hidden flex flex-col gap-1.5 bg-white/[0.03] border border-white/5 rounded-[1.5rem] p-3">
             <div className="flex items-center justify-between shrink-0">
               <h3 className="text-[10px] font-bold text-white/50 uppercase tracking-widest leading-none">
                 {generations.length > 0 ? 'Your Design History' : 'Room Design Inspirations'}
