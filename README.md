@@ -4,7 +4,7 @@ Space Muce is a web application where users can upload a room photo, select a de
 
 ## Technology Stack
 
-- **Framework**: Next.js 14 (App Router)
+- **Framework**: Next.js 16
 - **Language**: TypeScript
 - **Styling**: Tailwind CSS
 - **Database & Storage**: Supabase (Postgres + Storage + Anonymous Auth)

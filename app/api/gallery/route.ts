@@ -24,7 +24,9 @@ export async function GET(request: Request) {
       return apiServerError('Server error, please try again', 'DATABASE_ERROR');
     }
 
-    return apiSuccess(generations || []);
+    const response = apiSuccess(generations || []);
+    response.headers.set('Cache-Control', 'private, max-age=0, stale-while-revalidate=60');
+    return response;
 
   } catch (error: unknown) {
     console.error('Unexpected server error in /api/gallery:', error);
