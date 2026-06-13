@@ -128,7 +128,7 @@ export function ComparisonSlider({
             fill
             sizes="(max-width: 1024px) 100vw, 80vw"
             className="object-cover grayscale-[10%] brightness-75 pointer-events-none"
-            loading="eager"
+            priority
           />
         </div>
       </div>
@@ -158,7 +158,7 @@ export function ComparisonSlider({
           fill
           sizes="(max-width: 1024px) 100vw, 80vw"
           className="object-cover pointer-events-none"
-          loading="eager"
+          priority
           placeholder="blur"
           blurDataURL="data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHdpZHRoPSI4IiBoZWlnaHQ9IjgiIHZpZXdCb3g9IjAgMCA4IDgiPjxyZWN0IHdpZHRoPSI4IiBoZWlnaHQ9IjgiIGZpbGw9IiMzMzMzMzMiLz48L3N2Zz4="
         />
