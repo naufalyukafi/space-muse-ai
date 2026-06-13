@@ -1,9 +1,6 @@
 import type { NextConfig } from "next";
 
 const nextConfig: NextConfig = {
-  // Prevent Next.js/Turbopack from bundling sharp into the serverless function.
-  // Sharp must be loaded by Node.js directly at runtime so its native libvips binary works.
-  serverExternalPackages: ['sharp'],
   images: {
     remotePatterns: [
       {
