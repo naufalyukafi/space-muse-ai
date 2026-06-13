@@ -50,7 +50,7 @@ export const SAMPLE_GENERATIONS: Generation[] = [
   },
 ];
 
-export function Gallery({
+export const Gallery = React.memo(function Gallery({
   generations,
   activeId,
   onCardSelect,
@@ -91,11 +91,8 @@ export function Gallery({
           <GenerationCard
             generation={item}
             isActive={activeId === item.id}
-            onClick={() => onCardSelect(item)}
-            onRedesign={(e) => {
-              e.stopPropagation();
-              onRedesignClick(item);
-            }}
+            onCardSelect={onCardSelect}
+            onRedesignClick={onRedesignClick}
           />
         </div>
       ))}
@@ -111,4 +108,5 @@ export function Gallery({
       </div>
     </div>
   );
-}
+});
+

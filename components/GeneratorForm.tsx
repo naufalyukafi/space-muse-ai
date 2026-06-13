@@ -44,6 +44,7 @@ interface GeneratorFormProps {
   isGenerating: boolean;
   onSubmit: () => void;
   onError: (message: string, code: string) => void;
+  fileInputRef: React.RefObject<HTMLInputElement | null>;
 }
 
 export function GeneratorForm({
@@ -62,6 +63,7 @@ export function GeneratorForm({
   isGenerating,
   onSubmit,
   onError,
+  fileInputRef,
 }: GeneratorFormProps) {
   
   const handleNotesChange = (e: React.ChangeEvent<HTMLTextAreaElement>) => {
@@ -102,6 +104,7 @@ export function GeneratorForm({
             setImageUrl(null);
           }}
           onError={onError}
+          fileInputRef={fileInputRef}
         />
       </div>
 

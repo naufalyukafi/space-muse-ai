@@ -1,6 +1,7 @@
 'use client';
 
-import React, { useState, useRef } from 'react';
+import React, { useState } from 'react';
+import Image from 'next/image';
 import { Trash2, Camera } from 'lucide-react';
 
 interface PhotoPreviewProps {
@@ -9,21 +10,18 @@ interface PhotoPreviewProps {
   onFileSelect: (file: File) => void;
   onClear: () => void;
   onError: (message: string, code: string) => void;
+  fileInputRef: React.RefObject<HTMLInputElement | null>;
 }
 
-export function PhotoPreview({ selectedFile, imageUrl, onFileSelect, onClear, onError }: PhotoPreviewProps) {
+export function PhotoPreview({
+  selectedFile,
+  imageUrl,
+  onFileSelect,
+  onClear,
+  onError,
+  fileInputRef,
+}: PhotoPreviewProps) {
   const [isDragActive, setIsDragActive] = useState(false);
-  const fileInputRef = useRef<HTMLInputElement>(null);
-
-  const handleDrag = (e: React.DragEvent) => {
-    e.preventDefault();
-    e.stopPropagation();
-    if (e.type === 'dragenter' || e.type === 'dragover') {
-      setIsDragActive(true);
-    } else if (e.type === 'dragleave') {
-      setIsDragActive(false);
-    }
-  };
 
   const validateAndSelectFile = (file: File) => {
     const allowedTypes = ['image/jpeg', 'image/png', 'image/webp'];
@@ -48,6 +46,16 @@ export function PhotoPreview({ selectedFile, imageUrl, onFileSelect, onClear, on
     onFileSelect(file);
   };
 
+  const handleDrag = (e: React.DragEvent) => {
+    e.preventDefault();
+    e.stopPropagation();
+    if (e.type === 'dragenter' || e.type === 'dragover') {
+      setIsDragActive(true);
+    } else if (e.type === 'dragleave') {
+      setIsDragActive(false);
+    }
+  };
+
   const handleDrop = (e: React.DragEvent) => {
     e.preventDefault();
     e.stopPropagation();
@@ -69,27 +77,36 @@ export function PhotoPreview({ selectedFile, imageUrl, onFileSelect, onClear, on
     fileInputRef.current?.click();
   };
 
-  // Create local object URL for preview
-  const filePreviewUrl = selectedFile ? URL.createObjectURL(selectedFile) : (imageUrl || null);
+  // Create local object URL for preview only when selectedFile/imageUrl changes
+  const filePreviewUrl = React.useMemo(() => {
+    if (selectedFile) {
+      return URL.createObjectURL(selectedFile);
+    }
+    return imageUrl || null;
+  }, [selectedFile, imageUrl]);
 
   // Cleanup object URL
   React.useEffect(() => {
     return () => {
-      if (selectedFile && filePreviewUrl) {
+      if (filePreviewUrl && filePreviewUrl.startsWith('blob:')) {
         URL.revokeObjectURL(filePreviewUrl);
       }
     };
-  }, [selectedFile, filePreviewUrl]);
+  }, [filePreviewUrl]);
 
   if (filePreviewUrl) {
     const isRemote = !selectedFile;
     return (
       <div className="glass p-3 rounded-[1.5rem] flex items-center justify-between h-28 border border-white/20 relative group">
         <div className="flex items-center gap-3 w-full overflow-hidden">
-          <img
+          <Image
             src={filePreviewUrl}
             alt="Preview"
-            className="w-20 h-20 rounded-[1rem] object-cover border border-white/10 shrink-0"
+            width={80}
+            height={80}
+            className="rounded-[1rem] object-cover border border-white/10 shrink-0"
+            loading="eager"
+            unoptimized={filePreviewUrl.startsWith('blob:')}
           />
           <div className="flex flex-col min-w-0 pr-6">
             <span className="text-[12px] font-semibold text-white/90 truncate">
@@ -138,3 +155,4 @@ export function PhotoPreview({ selectedFile, imageUrl, onFileSelect, onClear, on
     </div>
   );
 }
+

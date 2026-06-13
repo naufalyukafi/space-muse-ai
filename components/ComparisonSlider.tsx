@@ -1,7 +1,8 @@
 'use client';
 
 import React, { useState, useRef, useEffect } from 'react';
-import { Image, Sparkles, Download, ArrowLeftRight, MousePointer } from 'lucide-react';
+import Image from 'next/image';
+import { Image as ImageIcon, Sparkles, Download, ArrowLeftRight, MousePointer } from 'lucide-react';
 
 interface ComparisonSliderProps {
   originalUrl: string;
@@ -116,15 +117,18 @@ export function ComparisonSlider({
       >
         {/* Label */}
         <div className="absolute top-5 left-5 glass bg-black/40 px-4 py-2 rounded-full text-[12px] font-medium z-20 text-white/90 flex items-center gap-2 backdrop-blur-md whitespace-nowrap">
-          <Image className="w-4 h-4" /> {titleOriginal}
+          <ImageIcon className="w-4 h-4" /> {titleOriginal}
         </div>
 
         {/* Force image to remain at container's full size, not clipped size */}
         <div className="absolute inset-y-0 left-0 w-full h-full" style={{ width: containerWidth ? `${containerWidth}px` : '100%' }}>
-          <img
+          <Image
             src={originalUrl}
             alt="Original Room"
-            className="w-full h-full object-cover grayscale-[10%] brightness-75 pointer-events-none"
+            fill
+            sizes="(max-width: 1024px) 100vw, 80vw"
+            className="object-cover grayscale-[10%] brightness-75 pointer-events-none"
+            loading="eager"
           />
         </div>
       </div>
@@ -148,10 +152,15 @@ export function ComparisonSlider({
           </button>
         </div>
 
-        <img
+        <Image
           src={resultUrl}
           alt="Redesigned Room"
-          className="w-full h-full object-cover pointer-events-none"
+          fill
+          sizes="(max-width: 1024px) 100vw, 80vw"
+          className="object-cover pointer-events-none"
+          loading="eager"
+          placeholder="blur"
+          blurDataURL="data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHdpZHRoPSI4IiBoZWlnaHQ9IjgiIHZpZXdCb3g9IjAgMCA4IDgiPjxyZWN0IHdpZHRoPSI4IiBoZWlnaHQ9IjgiIGZpbGw9IiMzMzMzMzMiLz48L3N2Zz4="
         />
       </div>
 
@@ -172,3 +181,4 @@ export function ComparisonSlider({
     </div>
   );
 }
+
