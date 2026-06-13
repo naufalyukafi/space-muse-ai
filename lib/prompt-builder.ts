@@ -1,3 +1,5 @@
+import 'server-only';
+
 export const STYLE_DESCRIPTIONS: Record<string, string> = {
   minimalist: "clean lines, uncluttered space, functional furniture, lots of negative space, simple forms",
   japandi: "Japanese-Scandinavian fusion, natural wood textures, wabi-sabi aesthetic, organic forms, handcrafted details",

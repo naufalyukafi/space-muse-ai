@@ -1,4 +1,6 @@
+import 'server-only';
 import { GoogleGenerativeAI } from "@google/generative-ai";
+
 
 export async function generateInteriorDesign(
   imageBuffer: Buffer,

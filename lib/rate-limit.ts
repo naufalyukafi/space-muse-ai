@@ -1,3 +1,5 @@
+import 'server-only';
+
 // In-memory rate limiting implementation for the Next.js API routes.
 // Limitation: Since this rate limit uses a module-level Map, it is stored in-memory
 // and is scoped only to a single Vercel function instance/container. It will not

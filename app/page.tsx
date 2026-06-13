@@ -3,11 +3,27 @@
 import React, { useState, useEffect, useCallback, useOptimistic, startTransition, useRef } from 'react';
 import { ArrowLeftRight, Sparkles, Loader2 } from 'lucide-react';
 import { useAuth } from '@/components/AuthProvider';
-import { GeneratorForm } from '@/components/GeneratorForm';
-import { Gallery, SAMPLE_GENERATIONS } from '@/components/Gallery';
+import { SAMPLE_GENERATIONS } from '@/components/Gallery';
 import { ComparisonSlider } from '@/components/ComparisonSlider';
 import { ErrorBanner } from '@/components/ErrorBanner';
 import type { Generation } from '@/components/GenerationCard';
+import dynamic from 'next/dynamic';
+
+const Gallery = dynamic(
+  () => import('@/components/Gallery').then((mod) => mod.Gallery),
+  {
+    ssr: false,
+    loading: () => <div className="h-[130px] bg-secondary rounded-[1.5rem]" />
+  }
+);
+
+const GeneratorForm = dynamic(
+  () => import('@/components/GeneratorForm').then((mod) => mod.GeneratorForm),
+  {
+    ssr: false,
+    loading: () => <div className="h-[460px] bg-secondary rounded-[1.5rem]" />
+  }
+);
 
 const handleUploadPlaceholderClick = () => {
   // Directly trigger the click event on the hidden file input
