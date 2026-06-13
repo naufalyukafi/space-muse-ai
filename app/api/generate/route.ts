@@ -48,7 +48,7 @@ export async function POST(request: Request) {
     const rateLimit = checkRateLimit(userId);
     if (!rateLimit.allowed) {
       return NextResponse.json(
-        { error: 'RATE_LIMITED', message: `Too many requests. Try again in ${rateLimit.retryAfter} seconds.` },
+        { error: 'RATE_LIMITED', message: 'Too many requests. Please try again later.' },
         {
           status: 429,
           headers: {
