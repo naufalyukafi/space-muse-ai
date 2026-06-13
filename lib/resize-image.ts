@@ -3,13 +3,14 @@ import sharp from 'sharp';
 
 /**
  * Resizes an image buffer so its longest side is at most 1024px,
- * keeping the aspect ratio, and converts the output to JPEG with quality 85.
+ * keeping the aspect ratio, and converts it to JPEG at quality 85.
  *
- * If the input buffer is already under 200KB, it returns the input as-is
- * to prevent unnecessary double compression.
+ * If the input is already under 200 KB it is returned as-is to avoid
+ * unnecessary double-compression.
  *
- * sharp is declared as a serverExternalPackage in next.config.ts so Next.js
- * does NOT bundle it — the Node.js runtime loads the native binary directly.
+ * sharp is declared in serverExternalPackages (next.config.ts) so Next.js /
+ * Turbopack does NOT bundle it — the Node.js runtime resolves the native
+ * libvips binary directly from node_modules at runtime.
  */
 export async function resizeForGemini(input: Buffer): Promise<Buffer> {
   if (input.length < 200 * 1024) {

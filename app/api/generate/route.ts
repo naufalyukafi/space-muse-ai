@@ -14,6 +14,9 @@ import { createHash } from 'crypto';
 import { checkRateLimit } from '@/lib/rate-limit';
 import { NextResponse } from 'next/server';
 
+// Explicitly declare Node.js runtime — required for native addons (sharp/libvips).
+// Edge runtime cannot load native .so binaries.
+export const runtime = 'nodejs';
 export const maxDuration = 60;
 
 type GenerationRow = {
