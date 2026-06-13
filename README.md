@@ -123,8 +123,8 @@ Row Level Security (RLS) ensures users can only read and write their own databas
 ### Supabase Storage
 Large generated images are stored in Supabase Storage. Storing only URLs in Postgres keeps the database lean.
 
-### Image Resizing via Sharp
-Original images are resized server-side using Sharp before the Gemini API call to reduce payload size and latency.
+### Image Resizing via Jimp
+Original images are resized server-side using Jimp before the Gemini API call to reduce payload size and latency. Jimp is used instead of Sharp because it is written in pure JavaScript and does not require native dependencies. This avoids deployment issues on Vercel Serverless Functions, where Sharp's native binary dependencies (`libvips`) fail to compile or load due to environment compatibility or Turbopack bundler mismatch.
 
 ### In-Memory Rate Limiting
 Rate limiting is handled in-memory without Redis, which is sufficient for MVP/single-instance setups.
