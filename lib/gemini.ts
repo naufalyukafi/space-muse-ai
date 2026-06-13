@@ -33,7 +33,7 @@ export async function generateInteriorDesign(
             {
               inlineData: {
                 data: imageBuffer.toString("base64"),
-                mimeType: mimeType,
+                mimeType: 'image/jpeg',
               },
             },
             { text: prompt },

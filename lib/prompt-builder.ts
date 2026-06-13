@@ -13,12 +13,20 @@ export const PALETTE_DESCRIPTIONS: Record<string, string> = {
   bold: "deep navy, emerald green, rich burgundy, statement colors",
 };
 
+const cache = new Map<string, string>();
+
 export function buildPrompt(
   roomType: string,
   style: string,
   palette: string,
   notes?: string | null
 ): string {
+  const key = `${roomType}|${style}|${palette}|${notes ?? ''}`;
+  
+  if (cache.has(key)) {
+    return cache.get(key)!;
+  }
+
   // Format room type, e.g. "living_room" to "Living Room"
   const formattedRoomType = roomType
     .split('_')
@@ -43,5 +51,15 @@ high quality architectural visualization.`;
     prompt += `\n[Additional requirements: ${notes.trim()}]`;
   }
 
+  cache.set(key, prompt);
+  
+  if (cache.size > 100) {
+    const oldestKey = cache.keys().next().value;
+    if (oldestKey !== undefined) {
+      cache.delete(oldestKey);
+    }
+  }
+
   return prompt;
 }
+
