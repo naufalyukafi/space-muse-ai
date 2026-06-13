@@ -50,10 +50,12 @@ export const GenerationCard = React.memo(function GenerationCard({
 
   if (generation.status === 'generating') {
     return (
-      <div className="h-full w-full rounded-[1.5rem] border border-white/5 bg-white/[0.02] flex flex-col justify-end p-3 relative overflow-hidden select-none pointer-events-none animate-pulse">
-        <div className="shimmer"></div>
-        <div className="h-3.5 bg-white/10 rounded w-3/4 mb-1.5 z-10"></div>
-        <div className="h-2.5 bg-white/5 rounded w-1/2 z-10"></div>
+      <div className="h-full w-full rounded-[1.5rem] bg-secondary animate-pulse flex flex-col select-none pointer-events-none">
+        <div className="w-full aspect-[16/9] bg-white/[0.03]"></div>
+        <div className="flex-1 min-h-[60px] p-3 flex flex-col justify-center gap-1.5">
+          <div className="h-3.5 bg-white/10 rounded w-3/4"></div>
+          <div className="h-2.5 bg-white/5 rounded w-1/2"></div>
+        </div>
       </div>
     );
   }
@@ -67,26 +69,28 @@ export const GenerationCard = React.memo(function GenerationCard({
   return (
     <div
       onClick={handleClick}
-      className={`relative w-full h-full rounded-[1.5rem] overflow-hidden cursor-pointer hover:-translate-y-1 hover:z-20 transition-all duration-300 group select-none ${
+      className={`relative w-full h-full rounded-[1.5rem] overflow-hidden cursor-pointer hover:-translate-y-1 hover:z-20 transition-all duration-300 group select-none flex flex-col ${
         isActive
           ? 'ring-2 ring-pink-400 border-transparent shadow-[0_0_15px_rgba(244,114,182,0.4)] z-10'
           : 'border border-white/10 hover:border-white/30'
       }`}
     >
-      {/* Background image (result) */}
-      <Image
-        src={generation.result_url}
-        alt={`${roomLabel} - ${styleLabel}`}
-        fill
-        sizes="200px"
-        className="object-cover group-hover:scale-110 transition duration-500 pointer-events-none"
-        loading="lazy"
-        placeholder="blur"
-        blurDataURL="data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHdpZHRoPSI4IiBoZWlnaHQ9IjgiIHZpZXdCb3g9IjAgMCA4IDgiPjxyZWN0IHdpZHRoPSI4IiBoZWlnaHQ9IjgiIGZpbGw9IiMzMzMzMzMiLz48L3N2Zz4="
-      />
+      {/* Background image container (result) */}
+      <div className="relative w-full aspect-[16/9] overflow-hidden">
+        <Image
+          src={generation.result_url}
+          alt={`${roomLabel} - ${styleLabel}`}
+          fill
+          sizes="200px"
+          className="object-cover group-hover:scale-110 transition duration-500 pointer-events-none"
+          loading="lazy"
+          placeholder="blur"
+          blurDataURL="data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHdpZHRoPSI4IiBoZWlnaHQ9IjgiIHZpZXdCb3g9IjAgMCA4IDgiPjxyZWN0IHdpZHRoPSI4IiBoZWlnaHQ9IjgiIGZpbGw9IiMzMzMzMzMiLz48L3N2Zz4="
+        />
+      </div>
 
       {/* Info Overlay at the bottom */}
-      <div className="absolute bottom-0 left-0 right-0 p-3 bg-gradient-to-t from-black/95 via-black/80 to-transparent z-10 flex flex-col justify-end">
+      <div className="flex-1 min-h-[60px] p-3 bg-black/85 flex flex-col justify-center shrink-0">
         <p className="text-[11px] text-white font-semibold truncate leading-tight">
           {roomLabel} — {styleLabel}
         </p>

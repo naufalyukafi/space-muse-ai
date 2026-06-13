@@ -13,7 +13,7 @@ const Gallery = dynamic(
   () => import('@/components/Gallery').then((mod) => mod.Gallery),
   {
     ssr: false,
-    loading: () => <div className="h-[130px] bg-secondary rounded-[1.5rem]" />
+    loading: () => <div className="h-[175px] bg-secondary rounded-[1.5rem]" />
   }
 );
 
@@ -21,7 +21,7 @@ const GeneratorForm = dynamic(
   () => import('@/components/GeneratorForm').then((mod) => mod.GeneratorForm),
   {
     ssr: false,
-    loading: () => <div className="h-[460px] bg-secondary rounded-[1.5rem]" />
+    loading: () => <div className="h-[554px] bg-secondary rounded-[1.5rem]" />
   }
 );
 
@@ -449,7 +449,7 @@ export default function Home() {
           </div>
 
           {/* Gallery Carousel Container */}
-          <div className="h-[185px] shrink-0 overflow-hidden flex flex-col gap-1.5 bg-white/[0.03] border border-white/5 rounded-[1.5rem] p-3">
+          <div className="h-[215px] shrink-0 overflow-hidden flex flex-col gap-1.5 bg-white/[0.03] border border-white/5 rounded-[1.5rem] p-3">
             <div className="flex items-center justify-between shrink-0">
               <h3 className="text-[10px] font-bold text-white/50 uppercase tracking-widest leading-none">
                 {generations.length > 0 ? 'Your Design History' : 'Room Design Inspirations'}

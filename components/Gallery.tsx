@@ -61,23 +61,20 @@ export const Gallery = React.memo(function Gallery({
   if (isLoading) {
     return (
       <div className="h-full flex gap-3 w-full overflow-x-auto px-1 py-1 scrollbar-thin">
-        {[1, 2, 3].map((i) => (
+        {[1, 2, 3, 4].map((i) => (
           <div
             key={`skeleton-${i}`}
-            className="h-full w-[200px] flex-shrink-0 rounded-[1.5rem] border border-white/5 bg-white/[0.02] flex flex-col justify-end p-3 relative overflow-hidden"
+            className="h-full w-[200px] flex-shrink-0 rounded-[1.5rem] overflow-hidden bg-secondary animate-pulse flex flex-col"
           >
-            <div className="shimmer"></div>
-            <div className="h-3.5 bg-white/10 rounded w-3/4 mb-1.5 z-10"></div>
-            <div className="h-2.5 bg-white/5 rounded w-1/2 z-10"></div>
+            {/* Image area skeleton */}
+            <div className="w-full aspect-[16/9] bg-white/[0.03]"></div>
+            {/* Footer area skeleton */}
+            <div className="flex-1 min-h-[60px] p-3 flex flex-col justify-center gap-1.5">
+              <div className="h-3 bg-white/15 rounded w-3/4"></div>
+              <div className="h-2 bg-white/10 rounded w-1/2"></div>
+            </div>
           </div>
         ))}
-        <div
-          className="h-full w-[200px] flex-shrink-0 rounded-[1.5rem] overflow-hidden border border-white/5 bg-white/[0.02] flex flex-col items-center justify-center p-2 text-center select-none opacity-40 pointer-events-none"
-        >
-          <CloudUpload className="w-6 h-6 text-white/20 mb-1" />
-          <p className="text-[10px] font-bold text-white/30 leading-tight">Your Room's Turn!</p>
-          <p className="text-[9px] text-white/20 mt-0.5">Loading...</p>
-        </div>
       </div>
     );
   }
